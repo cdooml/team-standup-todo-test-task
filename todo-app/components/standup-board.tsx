@@ -60,6 +60,14 @@ export function StandupBoard({
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [optimisticTasks, setOptimisticTasks] = useState<Task[]>([]);
 
+  // Get current user data for optimistic updates
+  const currentUser = members.find((m) => m.user.id === userId)?.user || {
+    id: userId,
+    full_name: "You",
+    email: "",
+    avatar_url: null,
+  };
+
   useEffect(() => {
     setOptimisticTasks(tasks);
   }, [tasks]);
@@ -103,6 +111,14 @@ export function StandupBoard({
     }
   };
 
+  const handleOptimisticAdd = (task: Task) => {
+    setOptimisticTasks((prev) => [...prev, task]);
+  };
+
+  const handleOptimisticDelete = (taskId: string) => {
+    setOptimisticTasks((prev) => prev.filter((t) => t.id !== taskId));
+  };
+
   const yesterdayTasks = optimisticTasks.filter(
     (t) => t.section === "yesterday"
   );
@@ -112,7 +128,12 @@ export function StandupBoard({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <TaskForm teamId={teamId} userId={userId} />
+        <TaskForm
+          teamId={teamId}
+          userId={userId}
+          currentUser={currentUser}
+          onOptimisticAdd={handleOptimisticAdd}
+        />
         <PresenceIndicator members={members} onlineUserIds={onlineUsers} />
       </div>
 
@@ -130,6 +151,7 @@ export function StandupBoard({
             teamId={teamId}
             userId={userId}
             color="blue"
+            onOptimisticDelete={handleOptimisticDelete}
           />
           <TaskColumn
             id="today"
@@ -139,6 +161,7 @@ export function StandupBoard({
             teamId={teamId}
             userId={userId}
             color="green"
+            onOptimisticDelete={handleOptimisticDelete}
           />
           <TaskColumn
             id="blockers"
@@ -148,6 +171,7 @@ export function StandupBoard({
             teamId={teamId}
             userId={userId}
             color="red"
+            onOptimisticDelete={handleOptimisticDelete}
           />
         </div>
 

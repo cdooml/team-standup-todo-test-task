@@ -11,8 +11,19 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Plus, ChevronDown } from "lucide-react";
 import { createTask } from "@/actions/tasks";
+import { nanoid } from "nanoid";
+import type { Database } from "@/types/database.types";
 
 type Section = "yesterday" | "today" | "blockers";
+
+type Task = Database["public"]["Tables"]["tasks"]["Row"] & {
+  user: {
+    id: string;
+    full_name: string | null;
+    email: string;
+    avatar_url: string | null;
+  };
+};
 
 const sections: { value: Section; label: string }[] = [
   { value: "yesterday", label: "Yesterday" },
@@ -23,9 +34,18 @@ const sections: { value: Section; label: string }[] = [
 export function TaskForm({
   teamId,
   userId,
+  currentUser,
+  onOptimisticAdd,
 }: {
   teamId: string;
   userId: string;
+  currentUser: {
+    id: string;
+    full_name: string | null;
+    email: string;
+    avatar_url: string | null;
+  };
+  onOptimisticAdd?: (task: Task) => void;
 }) {
   const [isAdding, setIsAdding] = useState(false);
   const [title, setTitle] = useState("");
@@ -54,22 +74,45 @@ export function TaskForm({
 
     setLoading(true);
 
-    const result = await createTask({
+    // Create optimistic task with temporary ID
+    const tempId = `temp-${nanoid()}`;
+    const now = new Date().toISOString();
+    const optimisticTask: Task = {
+      id: tempId,
       team_id: teamId,
       user_id: userId,
       title: title.trim(),
+      description: null,
+      section,
+      status: "pending",
+      position: 0,
+      created_at: now,
+      updated_at: now,
+      user: currentUser,
+    };
+
+    // Optimistic update - show task immediately
+    onOptimisticAdd?.(optimisticTask);
+
+    // Reset form immediately for better UX
+    setTitle("");
+    setIsAdding(false);
+    setSection("today");
+
+    // Server update
+    const result = await createTask({
+      team_id: teamId,
+      user_id: userId,
+      title: optimisticTask.title,
       section,
       status: "pending",
       position: 0,
     });
 
-    if (!result.error) {
-      setTitle("");
-      setIsAdding(false);
-      setSection("today");
-    }
-
     setLoading(false);
+
+    // If there's an error, the realtime sync will handle removing the optimistic task
+    // and showing the actual one from the server
   };
 
   const handleCancel = () => {

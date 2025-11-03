@@ -25,16 +25,20 @@ export function TaskCard({
   teamId,
   userId,
   isDragging = false,
+  onOptimisticDelete,
 }: {
   task: Task;
   teamId: string;
   userId: string;
   isDragging?: boolean;
+  onOptimisticDelete?: (taskId: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showCheckAnimation, setShowCheckAnimation] = useState(false);
+  const [optimisticStatus, setOptimisticStatus] = useState(task.status);
+  const [isUpdating, setIsUpdating] = useState(false);
   const {
     attributes,
     listeners,
@@ -45,15 +49,20 @@ export function TaskCard({
     id: task.id,
   });
 
+  // Sync optimistic status with actual task status
   useEffect(() => {
-    if (task.status === "done") {
+    setOptimisticStatus(task.status);
+  }, [task.status]);
+
+  useEffect(() => {
+    if (optimisticStatus === "done") {
       const timer = setTimeout(() => {
         setShowCheckAnimation(true);
         setTimeout(() => setShowCheckAnimation(false), 1000);
       }, 0);
       return () => clearTimeout(timer);
     }
-  }, [task.status]);
+  }, [optimisticStatus]);
 
   const style = transform
     ? {
@@ -68,14 +77,41 @@ export function TaskCard({
     setEditing(false);
   };
 
-  const handleToggleStatus = async () => {
-    const newStatus = task.status === "done" ? "pending" : "done";
-    await updateTask(task.id, { status: newStatus });
+  const handleToggleStatus = async (checked: boolean | 'indeterminate') => {
+    // Prevent multiple rapid clicks
+    if (isUpdating) return;
+
+    const newStatus = checked === true ? "done" : "pending";
+
+    // Optimistic update for immediate feedback
+    setOptimisticStatus(newStatus);
+    setIsUpdating(true);
+
+    try {
+      const result = await updateTask(task.id, { status: newStatus });
+
+      // If update failed, revert to original status
+      if (result.error) {
+        setOptimisticStatus(task.status);
+      }
+    } catch (error) {
+      // Revert on error
+      setOptimisticStatus(task.status);
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const handleDelete = async () => {
     if (confirm("Delete this task?")) {
       setIsDeleting(true);
+
+      // Optimistic delete - remove from UI immediately
+      setTimeout(() => {
+        onOptimisticDelete?.(task.id);
+      }, 200); // Small delay to show the fade animation
+
+      // Server delete
       await deleteTask(task.id, teamId);
     }
   };
@@ -96,7 +132,7 @@ export function TaskCard({
       style={style}
       className={`group hover:shadow-md transition-all duration-200 ${
         isCurrentlyDragging || isDragging ? "opacity-50 scale-105" : ""
-      } ${task.status === "done" ? "opacity-60" : ""} ${
+      } ${optimisticStatus === "done" ? "opacity-60" : ""} ${
         isDeleting ? "opacity-0 scale-95" : ""
       } ${showCheckAnimation ? "ring-2 ring-green-500" : ""}`}
     >
@@ -111,8 +147,9 @@ export function TaskCard({
           </button>
 
           <Checkbox
-            checked={task.status === "done"}
+            checked={optimisticStatus === "done"}
             onCheckedChange={handleToggleStatus}
+            disabled={isUpdating}
             className="mt-1"
           />
 
@@ -136,7 +173,7 @@ export function TaskCard({
               <p
                 onClick={() => isOwner && setEditing(true)}
                 className={`text-sm cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 ${
-                  task.status === "done" ? "line-through" : ""
+                  optimisticStatus === "done" ? "line-through" : ""
                 }`}
               >
                 {task.title}

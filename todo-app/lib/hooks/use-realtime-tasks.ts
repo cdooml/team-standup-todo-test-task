@@ -20,6 +20,11 @@ type Task = Database["public"]["Tables"]["tasks"]["Row"] & {
 export function useRealtimeTasks(teamId: string, initialTasks: Task[]) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
 
+  // Sync with initialTasks when they change
+  useEffect(() => {
+    setTasks(initialTasks);
+  }, [initialTasks]);
+
   useEffect(() => {
     const supabase = createClient();
     // Set up realtime subscription
@@ -53,7 +58,11 @@ export function useRealtimeTasks(teamId: string, initialTasks: Task[]) {
             .single();
 
           if (newTask) {
-            setTasks((prev) => [...prev, newTask as Task]);
+            setTasks((prev) => {
+              // Remove any temporary optimistic tasks before adding the real one
+              const withoutTemp = prev.filter((t) => !t.id.startsWith("temp-"));
+              return [...withoutTemp, newTask as Task];
+            });
           }
         }
       )

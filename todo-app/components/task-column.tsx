@@ -34,6 +34,7 @@ export function TaskColumn({
   teamId,
   userId,
   color,
+  onOptimisticDelete,
 }: {
   id: string;
   title: string;
@@ -42,6 +43,7 @@ export function TaskColumn({
   teamId: string;
   userId: string;
   color: "blue" | "green" | "red";
+  onOptimisticDelete?: (taskId: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
 
@@ -78,6 +80,7 @@ export function TaskColumn({
               task={task}
               teamId={teamId}
               userId={userId}
+              onOptimisticDelete={onOptimisticDelete}
             />
           ))
         )}
